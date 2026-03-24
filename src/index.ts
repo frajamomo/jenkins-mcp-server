@@ -58,6 +58,34 @@ interface QueueItem {
 }
 
 /**
+ * Normalize a job path so each segment is prefixed with "job/".
+ * Accepts various formats:
+ *   "ocp-olm-setup"                        -> "job/ocp-olm-setup"
+ *   "job/ocp-olm-setup"                    -> "job/ocp-olm-setup"
+ *   "Private_Folders/frmoreno/CAPI"        -> "job/Private_Folders/job/frmoreno/job/CAPI"
+ *   "job/Private_Folders/job/frmoreno"     -> "job/Private_Folders/job/frmoreno"
+ */
+function normalizeJobPath(jobPath: string): string {
+  // Split by '/' and filter empty segments
+  const segments = jobPath.split('/').filter(s => s.length > 0);
+  const result: string[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    if (segments[i] === 'job') {
+      // Next segment is already the job name, push "job" as-is
+      result.push('job');
+    } else if (i === 0 || segments[i - 1] !== 'job') {
+      // This segment is a job name without a preceding "job/" — add it
+      result.push('job');
+      result.push(segments[i]);
+    } else {
+      // Previous segment was "job", this is the job name
+      result.push(segments[i]);
+    }
+  }
+  return result.join('/');
+}
+
+/**
  * Jenkins MCP Server class
  * Provides various Jenkins operations through the Model Context Protocol
  */
@@ -286,8 +314,9 @@ class JenkinsServer {
    */
   private async getBuildStatus(args: any) {
     const buildNumber = args.buildNumber || 'lastBuild';
+    const jobPath = normalizeJobPath(args.jobPath);
     const response = await this.axiosInstance.get<BuildStatus>(
-      `/${args.jobPath}/${buildNumber}/api/json`
+      `/${jobPath}/${buildNumber}/api/json`
     );
 
     return {
@@ -311,6 +340,7 @@ class JenkinsServer {
    * @param args - Contains jobPath and optional parameters
    */
   private async triggerBuild(args: any) {
+    const jobPath = normalizeJobPath(args.jobPath);
     const params = new URLSearchParams();
     // Add build parameters if provided
     if (args.parameters) {
@@ -320,9 +350,9 @@ class JenkinsServer {
     }
 
     // Use different endpoint based on whether parameters are provided
-    const endpoint = args.parameters 
-      ? `/${args.jobPath}/buildWithParameters`
-      : `/${args.jobPath}/build`;
+    const endpoint = args.parameters
+      ? `/${jobPath}/buildWithParameters`
+      : `/${jobPath}/build`;
 
     await this.axiosInstance.post(endpoint, params);
 
@@ -341,8 +371,9 @@ class JenkinsServer {
    * @param args - Contains jobPath and buildNumber
    */
   private async getBuildLog(args: any) {
+    const jobPath = normalizeJobPath(args.jobPath);
     const response = await this.axiosInstance.get(
-      `/${args.jobPath}/${args.buildNumber}/consoleText`
+      `/${jobPath}/${args.buildNumber}/consoleText`
     );
 
     return {
@@ -395,12 +426,13 @@ class JenkinsServer {
    * @param args - Contains jobPath and optional limit
    */
   private async getBuildHistory(args: any) {
+    const jobPath = normalizeJobPath(args.jobPath);
     const limit = args.limit || 10;
     // Use Jenkins Tree API to efficiently fetch build data
     const treeQuery = `builds[number,result,timestamp,duration,building,url]{0,${limit}}`;
-    
+
     const response = await this.axiosInstance.get(
-      `/${args.jobPath}/api/json?tree=${treeQuery}`
+      `/${jobPath}/api/json?tree=${treeQuery}`
     );
 
     const builds: BuildInfo[] = response.data.builds || [];
@@ -435,10 +467,11 @@ class JenkinsServer {
    * @param args - Contains jobPath and buildNumber
    */
   private async stopBuild(args: any) {
+    const jobPath = normalizeJobPath(args.jobPath);
     const buildNumber = args.buildNumber === 'lastBuild' ? 'lastBuild' : args.buildNumber;
-    
+
     await this.axiosInstance.post(
-      `/${args.jobPath}/${buildNumber}/stop`
+      `/${jobPath}/${buildNumber}/stop`
     );
 
     return {
@@ -488,8 +521,9 @@ class JenkinsServer {
    * @param args - Contains jobPath
    */
   private async getJobConfig(args: any) {
+    const jobPath = normalizeJobPath(args.jobPath);
     // Get job information in JSON format
-    const response = await this.axiosInstance.get(`/${args.jobPath}/api/json`);
+    const response = await this.axiosInstance.get(`/${jobPath}/api/json`);
     const jobInfo = response.data;
 
     // Extract key configuration information
