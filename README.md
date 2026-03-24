@@ -15,7 +15,7 @@ A Model Context Protocol (MCP) server that enables Claude to interact with Jenki
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/ddang-jung/jenkins-mcp-server.git
+git clone git@github.com:frajamomo/jenkins-mcp-server.git
 cd jenkins-mcp-server
 ```
 
@@ -179,6 +179,10 @@ Jenkins job paths follow this format:
 - Root level job: `job/JobName`
 - Folder job: `job/FolderName/job/JobName`
 - Multi-level: `job/Folder1/job/Folder2/job/JobName`
+
+The `job/` prefix is optional — paths are automatically normalized:
+- `MyJob` -> `job/MyJob`
+- `Folder/SubFolder/MyJob` -> `job/Folder/job/SubFolder/job/MyJob`
 
 ## Error Handling
 
